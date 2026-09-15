@@ -168,6 +168,43 @@ Check connectivity from Spoke to other Spokes again. It should now be possible t
 #### NSG Flows Logs
 
 #### Network Watcher Diagnostics
- 
+
+## Live Demo Environment: Trusted / Non-trusted Mesh Topology
+
+> The deployed lab in subscription `5d648a29-5d8e-4da2-a0f8-9a640b313144`, resource group `AVNM`
+> (region `swedencentral`) has been re-configured from the original Production/Development
+> Hub&Spoke-with-VPN pattern above into a **Trusted / Non-trusted mesh** pattern, matching the
+> "global mesh with hub firewall as router" reference design. See `whats-new.md` for the full
+> change log.
+
+Summary of the current live topology:
+
+- **Trusted network group** (`trusted-networkgroup`): a subset of VNETs from both the former
+  Production and Development sides, connected with a **Mesh** connectivity configuration
+  (`trusted-mesh`, global, direct peering, no hub). Any VM in this group can reach any other VM in
+  the group directly — this is the "meshed" trust boundary.
+- **Non-trusted Production network group** (`nontrusted-production-networkgroup`): remaining
+  Production VNETs, still Hub&Spoke (`production-hubspokemesh`, hub = `anm-vnet-0` / `hubgw-0`).
+  Spokes in this group can only reach each other through the hub; there is no mesh and no access to
+  the Non-trusted Development group.
+- **Non-trusted Development network group** (`nontrusted-development-networkgroup`): remaining
+  Development VNETs, Hub&Spoke (`development-hubspokemesh`, hub = `anm-vnet-16`). Isolated the same
+  way — no VPN, no mesh, no cross-group reachability.
+- **Simulated on-premises**: a new VNet `anm-vnet-onprem` (10.100.0.0/24) with its own VPN Gateway
+  `hubgw-onprem`, connected via a site-to-site VPN (BGP) to the Production hub gateway `hubgw-0`.
+  This is the only VPN connection left in the lab — Development's gateway (`hubgw-16`) and the old
+  Production↔Development VPN connections (`conn-high-low`/`conn-low-high`) were removed, since
+  transitive routing between the environments is now demonstrated with the mesh instead of a VPN
+  shortcut.
+- **Security Admin rules**: `secadminrulecoll-production` and `secadminrulecoll-development` now
+  scope their "allow within group" rules to the corresponding `nontrusted-*` network group;
+  `secadminrulecollall` (deny-all-outbound) applies to all three groups; a new
+  `secadminrulecoll-trusted` collection carries `AlwaysAllow` rules permitting intra-mesh traffic
+  for `trusted-networkgroup`.
+
+This lets a demo show, side by side: a fully meshed "trusted" zone with flat any-to-any
+reachability, two isolated "non-trusted" hub-and-spoke zones with no lateral movement between them,
+and a VPN-connected simulated on-premises network landing only in the Production hub — all managed
+centrally from one AVNM instance.
 
 

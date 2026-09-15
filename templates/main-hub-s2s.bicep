@@ -308,9 +308,6 @@ resource hubfirewallpip 'Microsoft.Network/publicIPAddresses@2022-09-01' = [for 
   properties: {
     publicIPAddressVersion: 'IPv4'
     publicIPAllocationMethod: 'Static'
-    publicIPPrefix: {
-      id: prefix.id
-    }
   }
 }]
 resource hubfirewallmanagementpip 'Microsoft.Network/publicIPAddresses@2022-09-01' = [for i in [0,copies/2]: {
@@ -328,9 +325,6 @@ resource hubfirewallmanagementpip 'Microsoft.Network/publicIPAddresses@2022-09-0
   properties: {
     publicIPAddressVersion: 'IPv4'
     publicIPAllocationMethod: 'Static'
-    publicIPPrefix: {
-      id: prefix.id
-    }
   }
 }]
 //=============================================================FIREWALL POLICY========================================================================================
@@ -430,9 +424,6 @@ resource bastionpip 'Microsoft.Network/publicIPAddresses@2022-09-01' = [for i in
   properties: {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
-    publicIPPrefix: {
-      id: prefix.id
-    }
   }
 }]
 //=============================================================VNET GATEWAYS==============================================================
@@ -531,9 +522,6 @@ resource hubgwpubip 'Microsoft.Network/publicIPAddresses@2022-09-01' = [for i in
   properties: {
     publicIPAddressVersion: 'IPv4'
     publicIPAllocationMethod: 'Static'
-    publicIPPrefix: {
-      id: prefix.id
-    }
   }
 }]
 //=============================================================VIRTUAL MACHINES===========================================================
@@ -635,13 +623,12 @@ resource vmName_IISExtension 'Microsoft.Compute/virtualMachines/extensions@2021-
 }]
 //===================================AVNM============================================================
 resource avnm 'Microsoft.Network/networkManagers@2024-05-01' = {
-  name: 'avnm'
+  name: 'AVNM-Demo'
   location: location
   properties: {
     networkManagerScopeAccesses: [
       'Connectivity'
       'SecurityAdmin'
-      'SecurityUser'
       'Routing'
     ]
     networkManagerScopes: {
@@ -846,7 +833,7 @@ resource allowprodtodev 'Microsoft.Network/networkManagers/securityAdminConfigur
   parent: secadminrulecollprod
   kind: 'Custom'
   properties: {
-    priority: 300
+    priority: 310
     access: 'AlwaysAllow'
     direction: 'Outbound'
     protocol: 'Any'
@@ -919,7 +906,7 @@ resource allowwithindev 'Microsoft.Network/networkManagers/securityAdminConfigur
   parent: secadminrulecolldev
   kind: 'Custom'
   properties: {
-    priority: 300
+    priority: 320
     access: 'AlwaysAllow'
     direction: 'Outbound'
     protocol: 'Any'
@@ -948,7 +935,7 @@ resource allowdevtoprod 'Microsoft.Network/networkManagers/securityAdminConfigur
   parent: secadminrulecolldev
   kind: 'Custom'
   properties: {
-    priority: 300
+    priority: 330
     access: 'AlwaysAllow'
     direction: 'Outbound'
     protocol: 'Any'
