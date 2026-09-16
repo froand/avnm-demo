@@ -169,42 +169,56 @@ Check connectivity from Spoke to other Spokes again. It should now be possible t
 
 #### Network Watcher Diagnostics
 
-## Live Demo Environment: Trusted / Non-trusted Mesh Topology
+## Live Demo Environment: Trusted / Non-trusted × Hub1 / Hub2 + Global Backup Mesh
 
 > The deployed lab in subscription `5d648a29-5d8e-4da2-a0f8-9a640b313144`, resource group `AVNM`
 > (region `swedencentral`) has been re-configured from the original Production/Development
-> Hub&Spoke-with-VPN pattern above into a **Trusted / Non-trusted mesh** pattern, matching the
-> "global mesh with hub firewall as router" reference design. See `whats-new.md` for the full
-> change log.
+> Hub&Spoke-with-VPN pattern above into a **4 network group topology** — Trusted and Non-trusted,
+> duplicated across two hubs (Hub1 and Hub2) — plus a cross-hub **global backup mesh** group,
+> matching the "trusted/non-trusted, meshed or not, hub-per-region" reference design. See
+> `whats-new.md` for the full change log. Architecture diagram:
+> `avnm-architecture.png` / `avnm-architecture.excalidraw` (session artifacts).
 
-Summary of the current live topology:
+Summary of the current live topology — **5 network groups**:
 
-- **Trusted network group** (`trusted-networkgroup`): a subset of VNETs from both the former
-  Production and Development sides, connected with a **Mesh** connectivity configuration
-  (`trusted-mesh`, global, direct peering, no hub). Any VM in this group can reach any other VM in
-  the group directly — this is the "meshed" trust boundary.
-- **Non-trusted Production network group** (`nontrusted-production-networkgroup`): remaining
-  Production VNETs, still Hub&Spoke (`production-hubspokemesh`, hub = `anm-vnet-0` / `hubgw-0`).
-  Spokes in this group can only reach each other through the hub; there is no mesh and no access to
-  the Non-trusted Development group.
-- **Non-trusted Development network group** (`nontrusted-development-networkgroup`): remaining
-  Development VNETs, Hub&Spoke (`development-hubspokemesh`, hub = `anm-vnet-16`). Isolated the same
-  way — no VPN, no mesh, no cross-group reachability.
-- **Simulated on-premises**: a new VNet `anm-vnet-onprem` (10.100.0.0/24) with its own VPN Gateway
-  `hubgw-onprem`, connected via a site-to-site VPN (BGP) to the Production hub gateway `hubgw-0`.
-  This is the only VPN connection left in the lab — Development's gateway (`hubgw-16`) and the old
-  Production↔Development VPN connections (`conn-high-low`/`conn-low-high`) were removed, since
-  transitive routing between the environments is now demonstrated with the mesh instead of a VPN
-  shortcut.
-- **Security Admin rules**: `secadminrulecoll-production` and `secadminrulecoll-development` now
-  scope their "allow within group" rules to the corresponding `nontrusted-*` network group;
-  `secadminrulecollall` (deny-all-outbound) applies to all three groups; a new
-  `secadminrulecoll-trusted` collection carries `AlwaysAllow` rules permitting intra-mesh traffic
-  for `trusted-networkgroup`.
+- **`trusted-hub1-networkgroup`** (`anm-vnet-2`, `8`, `9`, `10`): meshed via the
+  `production-hubspokemesh` connectivity config (Hub&Spoke, `useHubGateway=true`) under hub
+  `anm-vnet-0`/`hubfirewall-0`. Full any-to-any peering between the 4 VNETs in this group.
+- **`nontrusted-hub1-networkgroup`** (`anm-vnet-1`, `3`–`7`, `11`–`15` — 11 VNETs): Hub&Spoke only
+  (same `production-hubspokemesh` config, hub `anm-vnet-0`); spoke↔spoke traffic is routed through
+  `hubfirewall-0`, no mesh.
+- **`trusted-hub2-networkgroup`** (`anm-vnet-18`, `25`, `26`, `27`): meshed via
+  `development-hubspokemesh` under hub `anm-vnet-16`/`hubfirewall-16`. Same pattern as Hub1's
+  trusted group, in the second (logical) hub/region.
+- **`nontrusted-hub2-networkgroup`** (`anm-vnet-17`, `19`–`24`, `28`–`31` — 11 VNETs): Hub&Spoke
+  only, routed through `hubfirewall-16`, no mesh — mirrors Hub1's non-trusted group.
+- **`global-backup-networkgroup`** (`anm-vnet-2` + `anm-vnet-18`, one trusted VNet from each hub):
+  connected with a **Mesh** connectivity config (`global-backup-mesh`, global, direct peering, no
+  hub) — a cross-hub / cross-region disaster-recovery backup link between the two trusted zones.
 
-This lets a demo show, side by side: a fully meshed "trusted" zone with flat any-to-any
-reachability, two isolated "non-trusted" hub-and-spoke zones with no lateral movement between them,
-and a VPN-connected simulated on-premises network landing only in the Production hub — all managed
-centrally from one AVNM instance.
+Each hub now has **its own Azure Firewall** (`hubfirewall-0` in Hub1, `hubfirewall-16` in Hub2),
+acting as the router for its non-trusted spokes' transitive traffic — demonstrating the
+firewall-as-hub-router pattern instead of a VPN shortcut between environments.
+
+- **Simulated on-premises**: `anm-vnet-onprem` (10.100.0.0/24) with VPN Gateway `hubgw-onprem`,
+  connected via site-to-site VPN (BGP) **only to Hub1** (`hubgw-0`, the production-origin hub).
+  This is the only VPN connection in the lab — the old Hub2/Development gateway and the original
+  Production↔Development VPN link were removed, since cross-environment traffic is now demonstrated
+  with mesh + firewall routing instead of a VPN shortcut. Hub2 (`hubfirewall-16`) has no VPN
+  Gateway.
+- **Security Admin rules** (`secadminrule` config, 4 collections):
+  - `secadminrulecollall` — deny-all-outbound baseline, applies to all 4 hub network groups.
+  - `secadminrulecoll-production` — `allowwithinprod` (Allow) scoped to `nontrusted-hub1-networkgroup`.
+  - `secadminrulecoll-development` — `allowwithindev` (Allow) scoped to `nontrusted-hub2-networkgroup`.
+  - `secadminrulecoll-trusted` — `allowtrustedmesh-in`/`allowtrustedmesh-out` (**AlwaysAllow**),
+    applied to **both** `trusted-hub1-networkgroup` and `trusted-hub2-networkgroup` — this is the
+    rule collection that demonstrates Admin Rules (AlwaysAllow) superseding any NSG on the subnet.
+
+This lets a demo show, side by side: two hubs (Hub1/Hub2, one per "region" — both currently deployed
+in `swedencentral` for capacity reasons, kept logically separate by naming/network-group split),
+each split into a meshed "trusted" zone (flat any-to-any reachability) and an isolated
+"non-trusted" hub-and-spoke zone routed through that hub's own firewall, a VPN-connected simulated
+on-premises network landing only in Hub1, and a global backup mesh directly connecting the two
+trusted zones across hubs — all managed centrally from one AVNM instance.
 
 

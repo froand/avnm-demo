@@ -1,5 +1,54 @@
 # What's New
 
+## Hub1/Hub2 × Trusted/Non-trusted 4-Group Redesign + Global Backup Mesh (live demo environment)
+
+Second redesign pass on the same deployed lab (sub `5d648a29-5d8e-4da2-a0f8-9a640b313144`, rg
+`AVNM`, network manager `AVNM-Demo`, region `swedencentral`), replacing the single Trusted/Non-trusted
+mesh (below) with a 4-group topology that mirrors a reference slide showing two hubs, each split
+into meshed ("trusted") and hub-and-spoke ("non-trusted") zones, plus a cross-hub backup mesh.
+
+### Added
+- **`hubfirewall-16`**: a second Azure Firewall Premium, deployed into Hub2 (`anm-vnet-16`), so each
+  hub now routes its own non-trusted spoke↔spoke traffic independently (firewall-as-router pattern
+  in both hubs, not just Hub1).
+- 4 new network groups replacing the previous single `trusted-networkgroup`:
+  `trusted-hub1-networkgroup` (anm-vnet-2,8,9,10), `nontrusted-hub1-networkgroup` (anm-vnet-1,3-7,11-15),
+  `trusted-hub2-networkgroup` (anm-vnet-18,25,26,27), `nontrusted-hub2-networkgroup`
+  (anm-vnet-17,19-24,28-31).
+- `global-backup-networkgroup` (anm-vnet-2 + anm-vnet-18, one trusted VNet per hub) with a new Mesh
+  connectivity config `global-backup-mesh` — a cross-hub / cross-region DR backup link between the
+  two trusted zones.
+- Updated architecture diagram (`avnm-architecture.excalidraw` / `.png`, session artifacts)
+  reflecting the full 4-group + dual-firewall + on-prem-VPN + global-backup-mesh topology.
+
+### Changed
+- `production-hubspokemesh` and `development-hubspokemesh` retargeted (via repeated
+  `--applies-to-groups` CLI flags — see note below) to their respective trusted+non-trusted hub
+  group pairs.
+- `secadminrulecoll-trusted` retargeted to both `trusted-hub1-networkgroup` and
+  `trusted-hub2-networkgroup`; `secadminrulecollall` retargeted to all 4 hub network groups;
+  `secadminrulecoll-production`/`-development` retargeted to `nontrusted-hub1-networkgroup` /
+  `nontrusted-hub2-networkgroup`.
+- SecurityAdmin configuration redeployed (`post-commit --commit-type SecurityAdmin`) to
+  `swedencentral` after the rule collection updates.
+
+### Removed
+- Old single-group `trusted-networkgroup`, `nontrusted-production-networkgroup`,
+  `nontrusted-development-networkgroup` network groups (superseded by the 4 hub-scoped groups).
+- Old `trusted-mesh` connectivity config (superseded by `global-backup-mesh`, scoped to only the two
+  cross-hub trusted VNETs rather than the whole trusted set).
+
+### Note: `az network manager` CLI quirks discovered during this change
+- `security-admin-config rule-collection update --applies-to-groups` does **not** accept multiple
+  `network-group-id=X` values space-separated within a single flag instance — only the last one is
+  kept. Fix: repeat the whole flag once per group, e.g.
+  `--applies-to-groups network-group-id=A --applies-to-groups network-group-id=B`.
+- `connect-config delete` takes `--configuration-name` (not `--name`).
+- Deleting a network group requires `az network manager group delete` (not `network-group delete`).
+- A network group can't be deleted while still referenced by a *deployed* config version, even if
+  the latest saved config no longer references it — redeploy (post-commit) both Connectivity and
+  SecurityAdmin configs first.
+
 ## Trusted / Non-trusted Mesh Redesign (live demo environment)
 
 Applied directly to the deployed lab (sub `5d648a29-5d8e-4da2-a0f8-9a640b313144`, rg `AVNM`,
