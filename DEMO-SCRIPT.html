@@ -55,6 +55,8 @@
 <pre>az account set --subscription 5d648a29-5d8e-4da2-a0f8-9a640b313144</pre>
 </div>
 
+<div class="callout talk"><b>Key insight for this demo:</b> AVNM mesh (<code>DirectlyConnected</code>) connectivity does <b>not</b> create classic VNet peerings — it creates a distinct construct called a <b>connected group</b>. Meshed VNets show <b>no entry</b> under Peerings; the connection only appears in effective routes as next-hop type <b>ConnectedGroup</b>. Don't check the Peerings blade to prove mesh — check effective routes instead.</div>
+
 <h3>Quick reference — live inventory</h3>
 <table>
 <tr><th>Role</th><th>Name</th><th>Private IP</th></tr>
@@ -106,7 +108,7 @@ Show the architecture diagram (<code>avnm-architecture.png</code>) side-by-side:
 <h2 id="s2"><span class="num">2</span>Trusted Mesh vs Non-trusted Hub-and-Spoke <small>(5 min)</small></h2>
 <pre><span class="comment"># Trusted VNets are fully meshed — direct VNet-to-VNet route, no hub hop</span>
 az network nic show-effective-route-table --name VMNic-2 -g AVNM -o table</pre>
-<p>Look for a route to the Hub2 trusted range (10.0.18.0/24) with <b>next hop type = VNet peering</b> (direct), not the firewall.</p>
+<p>Look for routes to 10.0.8.0/24, 10.0.9.0/24, 10.0.10.0/24 (other Hub1-trusted mesh members) <b>and</b> 10.0.18.0/24 (Hub2-trusted, via the global backup mesh) all with <b>next hop type = ConnectedGroup</b> — this is the mesh construct, not a VNet peering.</p>
 <pre><span class="comment"># Non-trusted VNets only reach the hub — no spoke-to-spoke route</span>
 az network nic show-effective-route-table --name VMNic-1 -g AVNM -o table</pre>
 <p>Look for a route to another non-trusted spoke going via <b>VirtualAppliance (firewall)</b> or missing entirely if scope is hub-only.</p>
@@ -134,25 +136,28 @@ az network nic list-effective-nsg --name VMNic-2 -g AVNM -o table</pre>
 <h2 id="s5"><span class="num">5</span>Dual-Hub Symmetry <small>(2 min)</small></h2>
 <p>Show that Hub1 and Hub2 are configured identically (Trusted/Non-trusted groups, firewall router, same admin rules apply org-wide) — demonstrates the model scales to multi-region without per-region policy duplication.</p>
 <pre>az network nic show-effective-route-table --name VMNic-18 -g AVNM -o table   <span class="comment"># trusted-hub2, compare to VMNic-2 output</span></pre>
+<p>Same shape as VMNic-2: <b>ConnectedGroup</b> routes to the other Hub2-trusted mesh members (10.0.25/26/27.0/24), plus a plain <b>VNetPeering</b> route to its own hub (10.0.16.0/24) — identical pattern, different region.</p>
 
 <h2 id="s6"><span class="num">6</span>Global Backup Mesh / DR <small>(3 min)</small></h2>
 <p>Portal: <b>Connectivity configurations</b> → <code>global-backup-mesh</code> → show it spans all 4 groups (Trusted+Non-trusted × Hub1+Hub2).</p>
 <div class="callout talk">In addition to the day-to-day hub-and-spoke/mesh design, we layer a global mesh connectivity configuration for disaster-recovery scenarios — every VNet can reach every other VNet directly if the primary topology is unavailable, without re-architecting.</div>
+<p>Proof it's live: VMNic-2 (Hub1-trusted) shows a <b>ConnectedGroup</b> route to 10.0.18.0/24 — that's the Hub2-trusted VNet, reachable only because <code>global-backup-mesh</code> is deployed cross-hub, independent of the regional production mesh.</p>
 
 <h2 id="s7"><span class="num">7</span>Scoped On-Prem VPN Connectivity <small>(3 min)</small></h2>
 <p>Portal: <b>hubgw-0</b> (kept in Production/Hub1) ← <b>conn-prod-onprem</b> → <b>hubgw-onprem</b> (new simulated on-prem VNet) ← <b>conn-onprem-prod</b>.</p>
 <pre>az network vpn-connection show -g AVNM -n conn-prod-onprem --query connectionStatus -o tsv
 az network vpn-connection show -g AVNM -n conn-onprem-prod --query connectionStatus -o tsv</pre>
-<div class="callout talk">The VPN gateway is scoped only to the Production network group — Development/non-trusted groups have no path to on-prem at all. This is deliberate network segmentation: only the network group that needs hybrid connectivity gets it.</div>
+<div class="callout talk">The VPN gateway is scoped to the Production network group as a whole — both trusted-hub1 and non-trusted-hub1 inherit the gateway route (<code>useHubGateway</code>), since both sit under Hub1/Production. Development/Hub2 groups have no path to on-prem at all — the gateway simply isn't shared there. This is deliberate segmentation at the network-group level, not per-VNet.</div>
 
 <h2 id="s8"><span class="num">8</span>Live Connectivity Test Matrix <small>(5 min, run from Bastion)</small></h2>
 <table>
 <tr><th>From</th><th>To</th><th>Expected</th></tr>
-<tr><td>VM-2 (trusted-hub1, 10.0.2.4)</td><td>VM-18 (trusted-hub2, 10.0.18.4)</td><td class="success">✅ direct mesh</td></tr>
-<tr><td>VM-1 (non-trusted-hub1, 10.0.1.4)</td><td>VM-0 (hub1, 10.0.0.4)</td><td class="success">✅ via hub</td></tr>
+<tr><td>VM-2 (trusted-hub1, 10.0.2.4)</td><td>VM-18 (trusted-hub2, 10.0.18.4)</td><td class="success">✅ direct mesh (ConnectedGroup)</td></tr>
+<tr><td>VM-1 (non-trusted-hub1, 10.0.1.4)</td><td>VM-0 (hub1, 10.0.0.4)</td><td class="success">✅ via hub (VNetPeering)</td></tr>
 <tr><td>VM-1 (non-trusted-hub1)</td><td>VM-17 (non-trusted-hub2)</td><td class="fail">❌ no route (isolated spokes)</td></tr>
-<tr><td>VM-2 (trusted-hub1)</td><td>on-prem (via VPN)</td><td class="success">✅ only if VM is in Production group</td></tr>
-<tr><td>VM-17 (non-trusted-hub2)</td><td>on-prem</td><td class="fail">❌ VPN not reachable from non-trusted</td></tr>
+<tr><td>VM-2 (trusted-hub1)</td><td>on-prem (via VPN)</td><td class="success">✅ Hub1/Production is gateway-enabled</td></tr>
+<tr><td>VM-1 (non-trusted-hub1)</td><td>on-prem (via VPN)</td><td class="success">✅ also reachable — whole Hub1/Production group shares the gateway</td></tr>
+<tr><td>VM-17 (non-trusted-hub2)</td><td>on-prem</td><td class="fail">❌ Hub2/Development has no gateway route at all</td></tr>
 </table>
 <p>Connect via <b>Bastion → hubbastion-0</b> (for Hub1 VMs) or <b>hubbastion-16</b> (for Hub2 VMs), RDP/SSH into the VM, then <code>curl &lt;target-ip&gt;</code> or <code>Test-NetConnection &lt;target-ip&gt;</code>.</p>
 

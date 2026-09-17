@@ -1,5 +1,35 @@
 # What's New
 
+## Connectivity fix: deploy missing configs + demo script corrections (live demo environment)
+
+Pre-demo verification pass on the deployed lab found that two of the three connectivity
+configurations existed and were correctly configured, but had **never actually been committed/
+deployed** to `swedencentral`.
+
+### Fixed
+- `production-hubspokemesh` and `global-backup-mesh` were configured correctly (hub, `useHubGateway`,
+  group membership all matched the design) but `az network manager list-deploy-status` showed only
+  `development-hubspokemesh` as deployed. Root cause: they were saved but never pushed via
+  `post-commit`. Fixed with a single
+  `az network manager post-commit --commit-type Connectivity --target-locations swedencentral --configuration-ids <all 3 config IDs>`.
+  All three now show `Deployed`.
+- Verified end-to-end post-fix via effective routes: Hub1-trusted mesh (VMNic-2 →
+  `ConnectedGroup` to 10.0.8/9/10.0/24), cross-hub global backup mesh (VMNic-2 → `ConnectedGroup`
+  to 10.0.18.0/24), Hub1 non-trusted hub-and-spoke (VMNic-1 → `VNetPeering` to hub, `VirtualAppliance`
+  to firewall for 0.0.0.0/0), and on-prem VPN reachability from both trusted and non-trusted
+  Hub1/Production VMs (VMNic-1 and VMNic-2 both show a route to 10.100.0.0/24 via
+  `VirtualNetworkGateway` — Hub2/Development VMs, e.g. VMNic-17, correctly show no such route).
+
+### Key insight (also added to `DEMO-SCRIPT.html`)
+AVNM mesh (`DirectlyConnected`) connectivity does **not** create classic VNet peering objects — it
+creates a **connected group**. Meshed VNets show nothing under the Peerings blade or
+`az network vnet peering list`; the only way to confirm mesh connectivity is via effective routes,
+where it appears as next-hop type **`ConnectedGroup`**. `DEMO-SCRIPT.html` previously said to look
+for "next hop type = VNet peering" for trusted mesh — corrected throughout, plus a new callout
+explaining the distinction for the DNB audience. The on-prem VPN test matrix was also corrected:
+the gateway is scoped to the whole Hub1/Production network group (trusted *and* non-trusted), not
+just the trusted subgroup.
+
 ## Hub1/Hub2 × Trusted/Non-trusted 4-Group Redesign + Global Backup Mesh (live demo environment)
 
 Second redesign pass on the same deployed lab (sub `5d648a29-5d8e-4da2-a0f8-9a640b313144`, rg

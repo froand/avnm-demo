@@ -178,6 +178,12 @@ Check connectivity from Spoke to other Spokes again. It should now be possible t
 > matching the "trusted/non-trusted, meshed or not, hub-per-region" reference design. See
 > `whats-new.md` for the full change log. Architecture diagram:
 > `avnm-architecture.png` / `avnm-architecture.excalidraw` (session artifacts).
+>
+> **Deployment status:** all three connectivity configs (`development-hubspokemesh`,
+> `production-hubspokemesh`, `global-backup-mesh`) are committed and `Deployed` to `swedencentral`
+> (verify with `az network manager list-deploy-status --network-manager-name AVNM-Demo -g AVNM --region swedencentral -o table`).
+> Remember that mesh/`DirectlyConnected` connectivity never shows up as a VNet peering — always
+> confirm it via effective routes (next hop type `ConnectedGroup`), not the Peerings blade.
 
 Summary of the current live topology — **5 network groups**:
 
