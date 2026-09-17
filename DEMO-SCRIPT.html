@@ -53,6 +53,8 @@
 
 <div class="callout"><b>Before you start:</b><br>
 <pre>az account set --subscription 5d648a29-5d8e-4da2-a0f8-9a640b313144</pre>
+VM login (all VMs): <b>Username:</b> <code>AzureAdmin</code> &nbsp;|&nbsp; <b>Password:</b> <code>ANMtest-2023</code><br>
+Connect via Bastion (portal → VM → Connect → Bastion → native client or browser) using these credentials.
 </div>
 
 <div class="callout talk"><b>Key insight for this demo:</b> AVNM mesh (<code>DirectlyConnected</code>) connectivity does <b>not</b> create classic VNet peerings — it creates a distinct construct called a <b>connected group</b>. Meshed VNets show <b>no entry</b> under Peerings; the connection only appears in effective routes as next-hop type <b>ConnectedGroup</b>. Don't check the Peerings blade to prove mesh — check effective routes instead.</div>
@@ -74,6 +76,7 @@
 <tr><td>VPN GW (on-prem sim)</td><td>hubgw-onprem</td><td>—</td></tr>
 <tr><td>VPN connections</td><td>conn-onprem-prod / conn-prod-onprem</td><td>—</td></tr>
 <tr><td>NSG (shared)</td><td>anvm-nsg</td><td>deny outbound RFC1918, priority 150</td></tr>
+<tr><td>VM login</td><td>AzureAdmin</td><td>Password: ANMtest-2023</td></tr>
 </table>
 
 <h3>Security Admin rules (already configured — no live editing needed)</h3>
